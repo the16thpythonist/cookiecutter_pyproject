@@ -6,7 +6,7 @@
 .. |python-version| image:: https://img.shields.io/badge/Python-3.8.0-green.svg
    :target: https://www.python.org/
 
-.. |version| image:: https://img.shields.io/badge/version-{{ cookiecutter.version }}-orange.svg
+.. |version| image:: https://img.shields.io/badge/version-0.1.0-orange.svg
    :target: https://www.python.org/
 
 ===========================
@@ -18,15 +18,15 @@ such cookiecutter differs: It is less bloated in some areas while being a bit mo
 
 These are the main features:
 
-* Modern package management using Poetry_ and ``pyproject.toml``
-    * Using poetry-bumpversion_ for easy version management
-* Ready-to-go Click_ command line interface as a ``CommandGroup`` unlike one simple ``Command`` as it
-  is usually done.
-    * Uses custom ``CommandGroup`` subclass, which makes extensive customizations such as lazy loading of
-      commands or a plugin system easier in the future.
-    * ``--version`` optional already implemented and fully integrated into automatic *bumpversion*
-      version management
-* Sphinx_ documentation with ReadTheDocs_ theme and sphinx-autodoc_ pre-configured
+- Modern package management using Poetry_ and ``pyproject.toml``
+- Using poetry-bumpversion_ for easy version management
+- Ready-to-go Click_ command line interface (CLI)
+- Uses custom ``click.CommandGroup`` subclass, which makes extensive customizations such as lazy loading of
+  commands or a plugin system easier in the future.
+- ``--version`` optional already implemented and fully integrated into automatic *bumpversion*
+  version management
+- Basic Jinja2_ templating configuration
+- Sphinx_ documentation with ReadTheDocs_ theme and sphinx-autodoc_ pre-configured
 
 
 Usage
@@ -43,6 +43,7 @@ You need ``cookiecutter`` installed to use this package:
 .. _Poetry: https://python-poetry.org/
 .. _poetry-bumpversion: https://github.com/monim67/poetry-bumpversion
 .. _Click: https://click.palletsprojects.com/en/8.1.x/
+.. _Jinja2: https://jinja.palletsprojects.com/en/3.1.x/
 .. _Sphinx: https://www.sphinx-doc.org/en/master/
 .. _sphinx-autodoc: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
 .. _ReadTheDocs: https://readthedocs.org/
