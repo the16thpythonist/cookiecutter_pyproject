@@ -1,0 +1,12 @@
+{
+  "directory_name": "pyproject",
+  "project_slug": "{{ cookiecutter.directory_name }}",
+  "author_name": "John Doe",
+  "author_email": "john.doe@gmail.com",
+  "github_username": "JohnDoeRocks",
+  "version": "0.1.0",
+  "licence": ["MIT"],
+  "_copy_without_render": [
+        "{{ cookiecutter.directory_name }}/templates/*"
+    ]
+}
