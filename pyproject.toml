@@ -1,0 +1,27 @@
+[build-system]
+requires = ["poetry>=1.2.0b2"]
+build-backend = "poetry.masonry.api"
+
+[tool.poetry]
+name = "cookiecutter_pyproject"
+version = "0.2.0"
+description = "Cookiecutter for python projects / packages"
+license = "MIT"
+authors = ["Jonas Teufel <jonseb1998@gmail.com>"]
+maintainers = ["Jonas Teufel <jonseb1998@gmail.com>"]
+readme = "README.rst"
+packages = [
+    { include = "{{ cookiecutter.directory_name }}" },
+]
+
+[tool.poetry.dependencies]
+python = ">=3.8.0,<4.0"
+poetry-bumpversion = ">=0.2.0"
+pytest = ">=7.1.3"
+pytest-venv = ">=0.2.1"
+pytest-cookies = ">=0.6.1"
+
+# BUMPVERSION
+[tool.poetry_bumpversion.file."README.rst"]
+search = "version-{current_version}-orange.svg"
+replace = "version-{new_version}-orange.svg"

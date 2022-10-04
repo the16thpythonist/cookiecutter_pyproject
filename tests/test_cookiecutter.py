@@ -1,9 +1,11 @@
 import os
 import pathlib
 import subprocess
+import shutil
 
-PATH = pathlib.Path(__file__).parent.absolute()
-PROJECT_PATH = os.path.dirname(PATH)
+from .util import PATH, PROJECT_PATH
+from .util import run_command
+from .util import prepare_poetry
 
 
 def test_bake(cookies):
@@ -60,70 +62,59 @@ def test_installation(cookies, venv):
     # After it has been installed into a venv we can attempt to use it
     cli_command = f'{venv.python} -m pyproject.cli --help'
     # We know that if the help command goes through "--version" definitely needs to be in there
-    proc = subprocess.run(cli_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    proc, out, err = run_command(cli_command)
     assert '--version' in proc.stdout.decode()
 
     # Since we gave the version in the context, we now require it to be in the
     version_command = f'{venv.python} -m pyproject.cli --version'
-    proc = subprocess.run(version_command, stdout=subprocess.PIPE, shell=True)
+    proc, out, err = run_command(version_command)
     assert '0.2.0' in proc.stdout.decode()
-
-    list_dir_command = f'{venv.python} -m pyproject.cli --list-dir'
-    proc = subprocess.run(list_dir_command, stdout=subprocess.PIPE, shell=True)
-    print(proc.stdout.decode())
-
 
 
 def test_poetry(cookies, venv):
     context = {
         'directory_name': 'pyproject',
         'project_slug': 'pyproject',
-        'version': '0.2.0'
+        'version': '0.3.0'
     }
     result = cookies.bake(template=PROJECT_PATH, extra_context=context)
 
-    # Most importantly there should be no error during the bake process
     assert result.exit_code == 0
     assert result.exception is None
 
-    python_command = f'{venv.python} --version'
-    proc = subprocess.run(python_command, stdout=subprocess.PIPE, shell=True)
-    print('python version: ', proc.stdout.decode())
+    # First of all we need to install poetry into the venv
+    venv.install('poetry==1.2.1')
+    poetry_path = f'{venv.python} -m poetry'
+
+    # and we also need to make sure to switch to the correct environment
+    env_command = f'{poetry_path} -vvv env use {venv.python}'
+    proc, out, err = run_command(env_command, cwd=result.project_path)
+    # Then we need to run "poetry install"
+    install_command = f'{poetry_path} --no-cache install'
+    proc, out, err = run_command(install_command, cwd=result.project_path)
+    assert proc.returncode == 0
+    assert 'No dependencies to install or update' not in out
+
+    # We can check if that worked by attempting to import "click" first (which is a dependency of our
+    # project and thus should have been installed and then also attempting to install our project itself
+    proc, out, err = run_command(f'{venv.python} -c "import click"')
+    assert proc.returncode == 0
+    proc, out, err = run_command(f'{venv.python} -c "import pyproject"')
     assert proc.returncode == 0
 
-    # We need to do a bit of a more complicated install here using poetry because this is the only way
-    # how we can get the dev-dependencies installed as well.
-    # But this has the added value that it also checks if the poetry installation works properly
-    venv.install(f'poetry')
-    poetry_path = os.path.join(venv.bin, 'poetry')
-
-    # The following two commands are very important to correctly setup poetry with the virtualenv that
-    # is being used for the testing here!
-    poetry_config_command = f'{poetry_path} config virtualenvs.create false --local'
-    proc = subprocess.run(poetry_config_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          shell=True, cwd=result.project_path)
+    # Now another thingy we can test is if the poetry bumpversion feature works
+    bumpversion_command = f'{poetry_path} version minor'
+    proc, out, err = run_command(bumpversion_command, cwd=result.project_path)
+    assert proc.returncode == 0
+    proc, out, err = run_command(install_command, cwd=result.project_path)
     assert proc.returncode == 0
 
-    poetry_env_command = f'{poetry_path} env use {venv.python}'
-    proc = subprocess.run(poetry_env_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          shell=True, cwd=result.project_path)
+    cli_path = os.path.join(venv.bin, 'pyproject')
+    assert os.path.exists(cli_path)
+    version_command = f'{cli_path} --version'
+    proc, out, err = run_command(version_command)
     assert proc.returncode == 0
-
-    # Here we install the project
-    poetry_install_command = f'{poetry_path} install'
-    proc = subprocess.run(poetry_install_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          shell=True, cwd=result.project_path)
-    assert proc.returncode == 0
-
-    # Testing the "build" command
-    poetry_build_command = f'{poetry_path} build'
-    proc = subprocess.run(poetry_build_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          shell=True, cwd=result.project_path)
-    assert proc.returncode == 0
-    dist_path = os.path.join(result.project_path, 'dist')
-    assert os.path.exists(dist_path)
-    assert os.path.isdir(dist_path)
-    assert len(os.listdir(dist_path)) != 0
+    assert '0.3.0' in out
 
 
 def test_unittests(cookies, venv):
@@ -138,31 +129,17 @@ def test_unittests(cookies, venv):
     assert result.exit_code == 0
     assert result.exception is None
 
-    # We need to do a bit of a more complicated install here using poetry because this is the only way
-    # how we can get the dev-dependencies installed as well.
-    # But this has the added value that it also checks if the poetry installation works properly
-    venv.install(f'poetry')
-    poetry_path = os.path.join(venv.bin, 'poetry')
+    poetry, path = prepare_poetry(result.project_path, venv)
 
-    poetry_config_command = f'{poetry_path} config virtualenvs.create false --local'
-    proc = subprocess.run(poetry_config_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          shell=True, cwd=result.project_path)
+    # First we check if pytest is even available for the venv binary
+    pytest_command = f'{venv.python} -c "import pytest"'
+    proc, out, err = run_command(pytest_command)
     assert proc.returncode == 0
 
-    poetry_env_command = f'{poetry_path} env use {venv.python} ; {poetry_path} env info'
-    proc = subprocess.run(poetry_env_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          shell=True, cwd=result.project_path)
-    assert proc.returncode == 0
-
-    poetry_install_command = f'{poetry_path} install'
-    proc = subprocess.run(poetry_install_command, stdout=subprocess.PIPE, shell=True, cwd=result.project_path)
-    assert proc.returncode == 0
-
-    pytest_path = os.path.join(venv.bin, 'pytest')
-    assert os.path.exists(pytest_path)
-    pytest_command = f'{pytest_path} -s {result.project_path}/tests'
-    proc = subprocess.run(pytest_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    print(proc.stdout.decode(), proc.stderr.decode())
+    # Then we can actually run pytest for the tests inside the project folder
+    tests_path = os.path.join(path, 'tests')
+    test_command = f'{venv.python} -m pytest -s {tests_path}'
+    proc, out, err = run_command(test_command)
     assert proc.returncode == 0
 
 
@@ -178,38 +155,23 @@ def test_documentation(cookies, venv):
     assert result.exit_code == 0
     assert result.exception is None
 
-    # We need to do a bit of a more complicated install here using poetry because this is the only way
-    # how we can get the dev-dependencies installed as well.
-    # But this has the added value that it also checks if the poetry installation works properly
-    venv.install(f'poetry')
-    poetry_path = os.path.join(venv.bin, 'poetry')
-
-    poetry_config_command = f'{poetry_path} config virtualenvs.create false --local'
-    proc = subprocess.run(poetry_config_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          shell=True, cwd=result.project_path)
-    assert proc.returncode == 0
-
-    poetry_env_command = f'{poetry_path} env use {venv.python} ; {poetry_path} env info'
-    proc = subprocess.run(poetry_env_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                          shell=True, cwd=result.project_path)
-    assert proc.returncode == 0
-
-    poetry_install_command = f'{poetry_path} install'
-    proc = subprocess.run(poetry_install_command, stdout=subprocess.PIPE, shell=True, cwd=result.project_path)
-    assert proc.returncode == 0
+    poetry, path = prepare_poetry(result.project_path, venv)
 
     apidoc_command = f'{venv.bin}/sphinx-apidoc -f -o docs/source/ pyproject/'
-    proc = subprocess.run(apidoc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
-                          cwd=result.project_path)
-    print(proc.stdout.decode(), proc.stderr.decode())
-    print(os.listdir(f'{result.project_path}/docs'))
+    proc, out, err = run_command(apidoc_command, cwd=path)
     assert proc.returncode == 0
 
-    sphinx_command = f'{venv.bin}/sphinx-build -b html docs/ docs/_build/'
-    proc = subprocess.run(sphinx_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True,
-                          cwd=result.project_path)
-    print(proc.stdout.decode(), proc.stderr.decode())
+    docs_build_path = os.path.join(path, 'docs', '_build')
+    shutil.rmtree(docs_build_path, True)
+    assert not os.path.exists(docs_build_path)
+
+    sphinx_command = f'{venv.bin}/sphinx-build -b html ./docs/ ./docs/_build/'
+    proc, out, err = run_command(sphinx_command, cwd=path)
+    print(out)
+    print(err)
     assert proc.returncode == 0
+    assert os.path.exists(docs_build_path)
+    assert len(os.listdir(docs_build_path)) != 0
 
 
 
